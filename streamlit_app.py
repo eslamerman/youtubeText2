@@ -14,21 +14,22 @@ class YouTubeProcessor:
             aws_secret_access_key = st.secrets["aws"]["aws_secret_access_key"]
         )
         self.bucket_name = 'erman-demo-1'
-
+    
     def download_youtube_video(self, url, output_path):
-    """Download YouTube video"""
-    try:
-        ydl_opts = {
-            'format': 'best',
-            'outtmpl': output_path,
-        }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-            info = ydl.extract_info(url, download=False)
-            return info['title']
-    except Exception as e:
-        print(f"Error downloading video: {e}")
-        return None
+        
+        """Download YouTube video"""
+        try:
+            ydl_opts = {
+                'format': 'best',
+                'outtmpl': output_path,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+                info = ydl.extract_info(url, download=False)
+                return info['title']
+        except Exception as e:
+            print(f"Error downloading video: {e}")
+            return None
 
  
     def convert_to_audio(self, video_path, audio_path):
