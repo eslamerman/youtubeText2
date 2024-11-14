@@ -28,7 +28,7 @@ class YouTubeAudioProcessor:
                     'preferredquality': quality,
                 }],
                 'outtmpl': audio_path,
-                'progress_hooks': [self._progress_hook],
+                'progress_hooks': [self._progress_hook],  # Attach the progress hook
             }
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -38,7 +38,17 @@ class YouTubeAudioProcessor:
                 except Exception as e:
                     raise Exception(f"Error downloading audio: {str(e)}")
 
-    # Upload to S3 remains unchanged
+    def _progress_hook(self, d):
+        """Hook to track download progress and update Streamlit session state"""
+        if d['status'] == 'downloading':
+            total_bytes = d.get('total_bytes')
+            downloaded_bytes = d.get('downloaded_bytes')
+            if total_bytes and downloaded_bytes:
+                progress = (downloaded_bytes / total_bytes) * 100
+                st.session_state.progress = progress
+        elif d['status'] == 'finished':
+            st.session_state.progress = 100
+
     def upload_to_s3(self, file_path, s3_key):
         """Upload file to S3"""
         try:
@@ -57,7 +67,6 @@ class YouTubeAudioProcessor:
             return f"s3://{self.bucket_name}/{s3_key}"
         except Exception as e:
             raise Exception(f"Error uploading to S3: {str(e)}")
-
 
 def main():
     st.title("YouTube to Audio Converter")
