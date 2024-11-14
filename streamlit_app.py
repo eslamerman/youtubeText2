@@ -10,8 +10,8 @@ class YouTubeAudioProcessor:
         # Initialize S3 client
         self.s3_client = boto3.client(
             's3',
-            aws_access_key_id=st.secrets["AWS_ACCESS_KEY_ID"],
-            aws_secret_access_key=st.secrets["AWS_SECRET_ACCESS_KEY"]
+            aws_access_key_id=st.secrets["aws"]["AWS_ACCESS_KEY_ID"],
+            aws_secret_access_key=st.secrets["aws"]["AWS_SECRET_ACCESS_KEY"]
         )
         self.bucket_name = 'erman-demo-1'
 
