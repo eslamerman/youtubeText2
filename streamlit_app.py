@@ -1,55 +1,41 @@
-import streamlit as st
-import boto3
-import yt_dlp
-import os
-from datetime import datetime
-import uuid
+import tempfile
 
 class YouTubeAudioProcessor:
     def __init__(self):
         # Initialize S3 client
         self.s3_client = boto3.client(
             's3',
-            aws_access_key_id = st.secrets["aws"]["aws_access_key_id"],
-            aws_secret_access_key = st.secrets["aws"]["aws_secret_access_key"]
+            aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
+            aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
         )
         self.bucket_name = 'erman-demo-1'
 
-    def download_and_convert_to_audio(self, url, output_path):
-        """Download YouTube video and convert directly to audio"""
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
-            'outtmpl': output_path,
-            'progress_hooks': [self._progress_hook],
-        }
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            try:
-                info = ydl.extract_info(url, download=True)
-                return info.get('title', 'Unknown Title')
-            except Exception as e:
-                raise Exception(f"Error downloading audio: {str(e)}")
+    def download_and_convert_to_audio(self, url, quality='192'):
+        """Download YouTube video and convert directly to audio in a temporary file"""
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as temp_audio_file:
+            audio_path = temp_audio_file.name  # Path to temporary file
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': quality,
+                }],
+                'outtmpl': audio_path,
+                'progress_hooks': [self._progress_hook],
+            }
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                try:
+                    info = ydl.extract_info(url, download=True)
+                    return info.get('title', 'Unknown Title'), audio_path
+                except Exception as e:
+                    raise Exception(f"Error downloading audio: {str(e)}")
 
-    def _progress_hook(self, d):
-        """Hook to track download progress"""
-        if d['status'] == 'downloading':
-            total_bytes = d.get('total_bytes')
-            downloaded_bytes = d.get('downloaded_bytes')
-            if total_bytes and downloaded_bytes:
-                progress = (downloaded_bytes / total_bytes) * 100
-                st.session_state.progress = progress
-        elif d['status'] == 'finished':
-            st.session_state.progress = 100
-
+    # Upload to S3 remains unchanged
     def upload_to_s3(self, file_path, s3_key):
         """Upload file to S3"""
         try:
-            # Create progress bar for upload
             with st.progress(0) as progress_bar:
                 def callback(bytes_transferred):
                     file_size = os.path.getsize(file_path)
@@ -65,6 +51,7 @@ class YouTubeAudioProcessor:
             return f"s3://{self.bucket_name}/{s3_key}"
         except Exception as e:
             raise Exception(f"Error uploading to S3: {str(e)}")
+
 
 def main():
     st.title("YouTube to Audio Converter")
@@ -91,30 +78,17 @@ def main():
         if youtube_url:
             try:
                 with st.spinner("Processing..."):
-                    # Create temporary directory
-                    temp_dir = "temp"
-                    os.makedirs(temp_dir, exist_ok=True)
-                    
-                    # Generate unique filename
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    unique_id = str(uuid.uuid4())[:8]
-                    audio_filename = f"audio_{timestamp}_{unique_id}.mp3"
-                    audio_path = os.path.join(temp_dir, audio_filename)
-
-                    # Progress bar for download and conversion
-                    progress_bar = st.progress(0)
+                    # Step 1: Download and convert to audio in a temporary file
                     status_text = st.empty()
-
-                    # Step 1: Download and convert to audio
                     status_text.text("Downloading and converting to audio...")
-                    video_title = processor.download_and_convert_to_audio(youtube_url, audio_path)
-                    
+                    video_title, audio_path = processor.download_and_convert_to_audio(youtube_url, quality=audio_quality)
+
                     # Update progress based on session state
-                    progress_bar.progress(st.session_state.progress)
+                    st.progress(st.session_state.progress)
                     
                     # Step 2: Upload to S3
                     status_text.text("Uploading to S3...")
-                    s3_audio_key = f"audio/{video_title}_{unique_id}.mp3"
+                    s3_audio_key = f"audio/{video_title}_{uuid.uuid4().hex[:8]}.mp3"
                     s3_url = processor.upload_to_s3(audio_path, s3_audio_key)
 
                     # Success message
